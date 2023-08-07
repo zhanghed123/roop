@@ -17,10 +17,9 @@ import onnxruntime
 import tensorflow
 import roop.globals
 import roop.metadata
-import roop.ui as ui
 from roop.predictor import predict_image, predict_video
-from roop.processors.frame.core import get_frame_processors_modules
-from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+from roop.processors.frame.core import get_frame_processors_modules, list_frame_processors_names
+from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path, list_module_names
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
@@ -28,13 +27,14 @@ warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
 
 def parse_args() -> None:
     signal.signal(signal.SIGINT, lambda signal_number, frame: destroy())
-    program = argparse.ArgumentParser(formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=100))
+    program = argparse.ArgumentParser(formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=120))
     program.add_argument('-s', '--source', help='select an source image', dest='source_path')
     program.add_argument('-t', '--target', help='select an target image or video', dest='target_path')
     program.add_argument('-o', '--output', help='select output file or directory', dest='output_path')
-    program.add_argument('--frame-processor', help='frame processors (choices: face_swapper, face_enhancer, ...)', dest='frame_processor', default=['face_swapper'], nargs='+')
+    program.add_argument('--frame-processors', help='list of available frame processors', dest='frame_processors', default=['face_swapper'], nargs='+')
+    program.add_argument('--ui-layouts', help='list of available ui layouts', dest='ui_layouts', default=['default'], nargs='+')
     program.add_argument('--keep-fps', help='keep target fps', dest='keep_fps', action='store_true')
-    program.add_argument('--keep-frames', help='keep temporary frames', dest='keep_frames', action='store_true')
+    program.add_argument('--keep-temp', help='keep temporary frames', dest='keep_temp', action='store_true')
     program.add_argument('--skip-audio', help='skip target audio', dest='skip_audio', action='store_true')
     program.add_argument('--many-faces', help='process every face', dest='many_faces', action='store_true')
     program.add_argument('--reference-face-position', help='position of the reference face', dest='reference_face_position', type=int, default=0)
@@ -45,7 +45,7 @@ def parse_args() -> None:
     program.add_argument('--output-video-encoder', help='encoder used for the output video', dest='output_video_encoder', default='libx264', choices=['libx264', 'libx265', 'libvpx-vp9', 'h264_nvenc', 'hevc_nvenc'])
     program.add_argument('--output-video-quality', help='quality used for the output video', dest='output_video_quality', type=int, default=35, choices=range(101), metavar='[0-100]')
     program.add_argument('--max-memory', help='maximum amount of RAM in GB', dest='max_memory', type=int)
-    program.add_argument('--execution-provider', help='available execution provider (choices: cpu, ...)', dest='execution_provider', default=['cpu'], choices=suggest_execution_providers(), nargs='+')
+    program.add_argument('--execution-providers', help='list of available execution providers (choices: cpu, ...)', dest='execution_providers', default=['cpu'], choices=suggest_execution_providers(), nargs='+')
     program.add_argument('--execution-threads', help='number of execution threads', dest='execution_threads', type=int, default=suggest_execution_threads())
     program.add_argument('-v', '--version', action='version', version=f'{roop.metadata.name} {roop.metadata.version}')
 
@@ -55,9 +55,10 @@ def parse_args() -> None:
     roop.globals.target_path = args.target_path
     roop.globals.output_path = normalize_output_path(roop.globals.source_path, roop.globals.target_path, args.output_path)
     roop.globals.headless = roop.globals.source_path is not None and roop.globals.target_path is not None and roop.globals.output_path is not None
-    roop.globals.frame_processors = args.frame_processor
+    roop.globals.frame_processors = args.frame_processors
+    roop.globals.ui_layouts = args.ui_layouts
     roop.globals.keep_fps = args.keep_fps
-    roop.globals.keep_frames = args.keep_frames
+    roop.globals.keep_temp = args.keep_temp
     roop.globals.skip_audio = args.skip_audio
     roop.globals.many_faces = args.many_faces
     roop.globals.reference_face_position = args.reference_face_position
@@ -68,7 +69,7 @@ def parse_args() -> None:
     roop.globals.output_video_encoder = args.output_video_encoder
     roop.globals.output_video_quality = args.output_video_quality
     roop.globals.max_memory = args.max_memory
-    roop.globals.execution_providers = decode_execution_providers(args.execution_provider)
+    roop.globals.execution_providers = decode_execution_providers(args.execution_providers)
     roop.globals.execution_threads = args.execution_threads
 
 
@@ -83,6 +84,10 @@ def decode_execution_providers(execution_providers: List[str]) -> List[str]:
 
 def suggest_execution_providers() -> List[str]:
     return encode_execution_providers(onnxruntime.get_available_providers())
+
+
+def suggest_ui_layouts() -> List[str]:
+    return list_module_names('roop/uis/__layouts__')
 
 
 def suggest_execution_threads() -> int:
@@ -124,13 +129,11 @@ def pre_check() -> bool:
 
 def update_status(message: str, scope: str = 'ROOP.CORE') -> None:
     print(f'[{scope}] {message}')
-    if not roop.globals.headless:
-        ui.update_status(message)
 
 
 def start() -> None:
-    for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-        if not frame_processor.pre_start():
+    for frame_processor_module in get_frame_processors_modules(roop.globals.frame_processors):
+        if not frame_processor_module.pre_start():
             return
     # process image to image
     if has_image_extension(roop.globals.target_path):
@@ -138,10 +141,10 @@ def start() -> None:
             destroy()
         shutil.copy2(roop.globals.target_path, roop.globals.output_path)
         # process frame
-        for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-            update_status('Progressing...', frame_processor.NAME)
-            frame_processor.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
-            frame_processor.post_process()
+        for frame_processor_module in get_frame_processors_modules(roop.globals.frame_processors):
+            update_status('Progressing...', frame_processor_module.NAME)
+            frame_processor_module.process_image(roop.globals.source_path, roop.globals.output_path, roop.globals.output_path)
+            frame_processor_module.post_process()
         # validate image
         if is_image(roop.globals.target_path):
             update_status('Processing to image succeed!')
@@ -164,21 +167,23 @@ def start() -> None:
     # process frame
     temp_frame_paths = get_temp_frame_paths(roop.globals.target_path)
     if temp_frame_paths:
-        for frame_processor in get_frame_processors_modules(roop.globals.frame_processors):
-            update_status('Progressing...', frame_processor.NAME)
-            frame_processor.process_video(roop.globals.source_path, temp_frame_paths)
-            frame_processor.post_process()
+        for frame_processor_module in get_frame_processors_modules(roop.globals.frame_processors):
+            update_status('Progressing...', frame_processor_module.NAME)
+            frame_processor_module.process_video(roop.globals.source_path, temp_frame_paths)
+            frame_processor_module.post_process()
     else:
-        update_status('Frames not found...')
+        update_status('Temporary frames not found...')
         return
     # create video
     if roop.globals.keep_fps:
         fps = detect_fps(roop.globals.target_path)
         update_status(f'Creating video with {fps} FPS...')
-        create_video(roop.globals.target_path, fps)
+        if not create_video(roop.globals.target_path, fps):
+            update_status('Creating video failed...')
     else:
         update_status('Creating video with 30 FPS...')
-        create_video(roop.globals.target_path)
+        if not create_video(roop.globals.target_path):
+            update_status('Creating video failed...')
     # handle audio
     if roop.globals.skip_audio:
         move_temp(roop.globals.target_path, roop.globals.output_path)
@@ -216,5 +221,6 @@ def run() -> None:
     if roop.globals.headless:
         start()
     else:
-        window = ui.init(start, destroy)
-        window.mainloop()
+        import roop.uis.core as ui
+
+        ui.init()
