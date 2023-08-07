@@ -108,6 +108,7 @@ def update_execution_thread_count(execution_thread_count: int = 1) -> Dict[Any, 
     roop.globals.execution_thread_count = execution_thread_count
     return gradio.update(value=execution_thread_count)
 
+
 def update_execution_queue_count(execution_queue_count: int = 1) -> Dict[Any, Any]:
     roop.globals.execution_queue_count = execution_queue_count
     return gradio.update(value=execution_queue_count)
