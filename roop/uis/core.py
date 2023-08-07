@@ -1,5 +1,6 @@
 import importlib
-from typing import Dict, Optional, List
+import sys
+from typing import Dict, Optional, List, Any
 
 import cv2
 import gradio
@@ -10,14 +11,32 @@ from roop.uis.typing import Component, ComponentName
 from roop.utilities import list_module_names
 
 COMPONENTS: Dict[ComponentName, Component] = {}
+UI_LAYOUT_METHODS = [
+    'render',
+    'listen'
+]
 
 
 def init() -> None:
     with gradio.Blocks(theme=get_theme()) as ui:
-        ui_layout_module = importlib.import_module(f'roop.uis.__layouts__.{roop.globals.ui_layouts[0]}')
-        ui_layout_module.render()
-        ui_layout_module.listen()
+        for ui_layout in roop.globals.ui_layouts:
+            ui_layout_module = load_ui_layout_module(ui_layout)
+            ui_layout_module.render()
+            ui_layout_module.listen()
     ui.launch()
+
+
+def load_ui_layout_module(ui_layout: str) -> Any:
+    try:
+        ui_layout_module = importlib.import_module(f'roop.uis.__layouts__.{ui_layout}')
+        for method_name in UI_LAYOUT_METHODS:
+            if not hasattr(ui_layout_module, method_name):
+                raise NotImplementedError
+    except ModuleNotFoundError:
+        sys.exit(f'UI layout {ui_layout} could be not loaded.')
+    except NotImplementedError:
+        sys.exit(f'UI layout {ui_layout} not implemented correctly.')
+    return ui_layout_module
 
 
 def get_theme() -> gradio.Theme:

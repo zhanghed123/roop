@@ -3,7 +3,7 @@
 import os
 import sys
 # single thread doubles cuda performance - needs to be set before torch import
-if any(arg.startswith('--execution-provider') for arg in sys.argv):
+if any(arg.startswith('--execution-providers') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '1'
 # reduce tensorflow log level
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -18,7 +18,7 @@ import tensorflow
 import roop.globals
 import roop.metadata
 from roop.predictor import predict_image, predict_video
-from roop.processors.frame.core import get_frame_processors_modules, list_frame_processors_names
+from roop.processors.frame.core import get_frame_processors_modules
 from roop.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path, list_module_names
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
@@ -31,8 +31,8 @@ def parse_args() -> None:
     program.add_argument('-s', '--source', help='select an source image', dest='source_path')
     program.add_argument('-t', '--target', help='select an target image or video', dest='target_path')
     program.add_argument('-o', '--output', help='select output file or directory', dest='output_path')
-    program.add_argument('--frame-processors', help='list of available frame processors', dest='frame_processors', default=['face_swapper'], nargs='+')
-    program.add_argument('--ui-layouts', help='list of available ui layouts', dest='ui_layouts', default=['default'], nargs='+')
+    program.add_argument('--frame-processors', help='list of available frame processors (choices: face_swapper, face_enhancer, frame_enhancer, ...)', dest='frame_processors', default=['face_swapper'], nargs='+')
+    program.add_argument('--ui-layouts', help='list of available ui layouts (choices: default, ...)', dest='ui_layouts', default=['default'], nargs='+')
     program.add_argument('--keep-fps', help='keep target fps', dest='keep_fps', action='store_true')
     program.add_argument('--keep-temp', help='keep temporary frames', dest='keep_temp', action='store_true')
     program.add_argument('--skip-audio', help='skip target audio', dest='skip_audio', action='store_true')
@@ -118,8 +118,8 @@ def limit_resources() -> None:
 
 
 def pre_check() -> bool:
-    if sys.version_info < (3, 9):
-        update_status('Python version is not supported - please upgrade to 3.9 or higher.')
+    if sys.version_info < (3, 10):
+        update_status('Python version is not supported - please upgrade to 3.10 or higher.')
         return False
     if not shutil.which('ffmpeg'):
         update_status('ffmpeg is not installed.')
