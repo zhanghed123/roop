@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 import gradio
 import onnxruntime
 
@@ -86,7 +86,7 @@ def listen() -> None:
     MANY_FACES_CHECKBOX.change(lambda value: update_checkbox('many_faces', value), inputs=MANY_FACES_CHECKBOX, outputs=MANY_FACES_CHECKBOX)
 
 
-def update_frame_processors(frame_processors: List[str]) -> Dict[Any, Any]:
+def update_frame_processors(frame_processors: List[str]) -> Update:
     clear_frame_processors_modules()
     roop.globals.frame_processors = frame_processors
     for frame_processor in roop.globals.frame_processors:
