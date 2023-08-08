@@ -34,8 +34,8 @@ def render() -> None:
             'visible': False
         }
         if is_image(roop.globals.target_path):
-            temp_frame = cv2.imread(roop.globals.target_path)
-            preview_frame = get_preview_frame(temp_frame)
+            target_frame = cv2.imread(roop.globals.target_path)
+            preview_frame = get_preview_frame(target_frame)
             preview_image_args['value'] = ui.normalize_frame(preview_frame)
             preview_image_args['visible'] = True
         if is_video(roop.globals.target_path):
@@ -70,8 +70,8 @@ def listen() -> None:
 def update(frame_number: int = 0) -> Tuple[Update, Update]:
     sleep(0.5)
     if is_image(roop.globals.target_path):
-        temp_frame = cv2.imread(roop.globals.target_path)
-        preview_frame = get_preview_frame(temp_frame)
+        target_frame = cv2.imread(roop.globals.target_path)
+        preview_frame = get_preview_frame(target_frame)
         return gradio.update(value=ui.normalize_frame(preview_frame), visible=True), gradio.update(value=0, maximum=1, visible=False)
     if is_video(roop.globals.target_path):
         roop.globals.reference_frame_number = frame_number
