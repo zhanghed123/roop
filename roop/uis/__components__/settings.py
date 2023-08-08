@@ -5,6 +5,7 @@ import onnxruntime
 import roop.globals
 from roop.processors.frame.core import list_frame_processors_names, load_frame_processor_module, clear_frame_processors_modules
 from roop.uis import core as ui
+from roop.uis.typing import Update
 
 FRAME_PROCESSORS_CHECKBOX_GROUP: Optional[gradio.CheckboxGroup] = None
 EXECUTION_PROVIDERS_CHECKBOX_GROUP: Optional[gradio.CheckboxGroup] = None
@@ -99,21 +100,21 @@ def sort_frame_processors(frame_processors: List[str]) -> list[str]:
     return sorted(list_frame_processors_names(), key=frame_processor_key)
 
 
-def update_execution_providers(execution_providers: List[str]) -> Dict[Any, Any]:
+def update_execution_providers(execution_providers: List[str]) -> Update:
     roop.globals.execution_providers = execution_providers
     return gradio.update(value=execution_providers)
 
 
-def update_execution_thread_count(execution_thread_count: int = 1) -> Dict[Any, Any]:
+def update_execution_thread_count(execution_thread_count: int = 1) -> Update:
     roop.globals.execution_thread_count = execution_thread_count
     return gradio.update(value=execution_thread_count)
 
 
-def update_execution_queue_count(execution_queue_count: int = 1) -> Dict[Any, Any]:
+def update_execution_queue_count(execution_queue_count: int = 1) -> Update:
     roop.globals.execution_queue_count = execution_queue_count
     return gradio.update(value=execution_queue_count)
 
 
-def update_checkbox(name: str, value: bool) -> Dict[Any, Any]:
+def update_checkbox(name: str, value: bool) -> Update:
     setattr(roop.globals, name, value)
     return gradio.update(value=value)
